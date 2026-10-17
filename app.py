@@ -39,7 +39,6 @@ if not os.path.exists(UPLOAD_DIR):
 def load_data():
   if os.path.exists(CSV_FILE):
     df = pd.read_csv(CSV_FILE)
-    # 기존 데이터에 group 컬럼이 없을 경우 대비
     if "group" not in df.columns:
       df["group"] = "1모둠"
     return df
@@ -57,8 +56,6 @@ def load_data():
 
 
 # 세션 상태 초기화
-if "data" not in st.session_data if "data" in st.session_state else True:
-  pass
 if "data" not in st.session_state:
   st.session_state.data = load_data()
 
@@ -98,7 +95,7 @@ st.markdown(
 )
 st.divider()
 
-# --- 모드 선택 (학생 제출용 vs 모둠별 갤러리) ---
+# --- 메뉴 선택 (학생 제출용 vs 모둠별 갤러리) ---
 menu = st.radio(
     "메뉴 선택", ["📸 사진 제출하기", "👀 모둠별 갤러리 보기"], horizontal=True
 )
@@ -178,7 +175,7 @@ else:
       group_df = df[df["group"] == target_group]
 
       if group_df.empty:
-        st.info(f"{target_group에 제출된 게시물이 없습니다.")
+        st.info(f"{target_group}에 제출된 게시물이 없습니다.")
       else:
         # 최신순 정렬
         group_df_sorted = group_df.iloc[::-1].reset_index(drop=True)
@@ -202,10 +199,8 @@ else:
               if st.button(
                   f"🗑️ 이 게시물 삭제 ({row['name']})", key=f"del_{row['filename']}"
               ):
-                # 파일 삭제
                 if os.path.exists(file_path):
                   os.remove(file_path)
-                # 데이터프레임에서 해당 행 제거
                 st.session_state.data = st.session_state.data[
                     st.session_state.data["filename"] != row["filename"]
                 ]
