@@ -4,31 +4,31 @@ import streamlit as st
 
 # 페이지 기본 설정 (Wide 레이아웃)
 st.set_page_config(
-    page_title="축제 사진 상상하고 분석하기", page_icon="📸", layout="wide"
+    page_title="세계 축제 이미지 분석", page_icon="🌍", layout="wide"
 )
 
-# 나눔고딕 폰트 적용 및 감성적인 파스텔톤 그라데이션 배경 CSS
+# 나눔고딕 명시적 적용 및 눈부시지 않은 아주 연하고 화사한 파스텔톤 그라데이션 배경 & 버튼 스타일 CSS
 st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
     
-    html, body, [class*="css"] {
+    * {
         font-family: 'Nanum Gothic', sans-serif !important;
     }
     
-    /* 예쁜 파스텔톤 그라데이션 배경 (라벤더 & 스카이블루 톤) */
+    /* 눈이 편안한 아주 연하고 밝은 파스텔톤 그라데이션 배경 */
     .stApp {
-        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
         background-attachment: fixed;
     }
     
-    /* 카드 디자인 최적화 */
+    /* 카드 디자인 스타일 */
     div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
-        background-color: rgba(255, 255, 255, 0.9);
+        background-color: rgba(255, 255, 255, 0.95);
         padding: 0.8rem;
         border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         margin-bottom: 1rem;
     }
     </style>
@@ -62,47 +62,42 @@ if "data" not in st.session_state:
 if "is_teacher" not in st.session_state:
   st.session_state.is_teacher = False
 
-if "show_pw_box" not in st.session_state:
-  st.session_state.show_pw_box = False
-
 if "zoomed_image" not in st.session_state:
   st.session_state.zoomed_image = None
 
 
-# --- 상단 타이틀 및 티 안 나는 교사 진입 아이콘 (비밀번호 숨김 처리) ---
-col_title, col_icon = st.columns([11, 1])
+# --- 상단 헤더 및 티 안 나는 교사 인증 (우측 구석에 숨겨진 점) ---
+col_title, col_secret = st.columns([12, 1])
 
 with col_title:
-  st.title("🎉 축제 사진 상상하고 분석하기")
+  st.title("🌍 세계 축제 이미지 분석")
+  st.markdown(
+      "<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>모둠별"
+      " 학습지 공유 보드</p>",
+      unsafe_allow_html=True,
+  )
 
-with col_icon:
-  if st.popover("👤"):
+with col_secret:
+  # 티 나지 않는 아주 작은 투명 포인트 (우측 구석의 점)
+  if st.popover(".", help=""):
     if not st.session_state.is_teacher:
-      # 평소에는 숨겨져 있다가 버튼을 눌러야 비밀번호 입력창이 나타남
-      if not st.session_state.show_pw_box:
-        if st.button("🔐 관리자 로그인"):
-          st.session_state.show_pw_box = True
-          st.rerun()
-      else:
-        pw_input = st.text_input(
-            "비밀번호 입력", type="password", key="teacher_pw_input"
-        )
-        if pw_input == "1232":
-          st.session_state.is_teacher = True
-          st.session_state.show_pw_box = False
-          st.rerun()
-        elif pw_input and pw_input != "1232":
-          st.error("비밀번호 오류")
+      pw_input = st.text_input(
+          "Password",
+          type="password",
+          key="teacher_pw_input",
+          label_visibility="collapsed",
+      )
+      if pw_input == "1232":
+        st.session_state.is_teacher = True
+        st.rerun()
     else:
-      st.success("교사 모드 활성화됨")
       if st.button("교사 모드 종료"):
         st.session_state.is_teacher = False
-        st.session_state.show_pw_box = False
         st.rerun()
 
-# 교사 모드 안내 배너
+# 교사 모드일 때만 안내 배너 표시
 if st.session_state.is_teacher:
-  st.info("🔓 [교사 모드] 사진을 클릭하여 확대하거나 삭제할 수 있습니다.")
+  st.info("🔓 [교사 모드 활성화됨] 사진을 클릭해 크게 보거나 삭제할 수 있습니다.")
 
 st.divider()
 
@@ -118,7 +113,7 @@ if st.session_state.zoomed_image:
           use_container_width=True,
       )
     with col_z2:
-      if st.button("❌ 확대 닫기", use_container_width=True):
+      if st.button("❌ 닫기", use_container_width=True):
         st.session_state.zoomed_image = None
         st.rerun()
   st.divider()
@@ -136,25 +131,35 @@ for idx, group_name in enumerate(groups):
 
     # 모둠별 사진 추가 버튼 (+)
     with st.popover(f"➕ {group_name} 사진 올리기", use_container_width=True):
-      st.markdown(f"**{group_name} 사진 등록**")
+      st.markdown(f"**📸 {group_name} 학습지 업로드**")
+
       with st.form(f"form_{group_name}", clear_on_submit=True):
-        upload_type = st.radio(
-            "방식 선택", ["사진선택", "카메라"], horizontal=True
+        st.markdown(
+            "<p style='font-size: 12px; font-weight: bold; color: #4b5563;"
+            " margin-bottom: 5px;'>사진 첨부 방식 선택</p>",
+            unsafe_allow_html=True,
+        )
+
+        # 직관적인 버튼형태 입력을 위한 분기 (카메라 vs 파일선택)
+        tab_choice = st.radio(
+            "방식",
+            ["📷 카메라 촬영", "📁 파일 / 앨범 선택"],
+            label_visibility="collapsed",
         )
 
         uploaded_file = None
-        if upload_type == "사진선택":
+        if "카메라" in tab_choice:
+          uploaded_file = st.camera_input("카메라 촬영")
+        else:
           uploaded_file = st.file_uploader(
               "사진 선택", type=["jpg", "jpeg", "png"]
           )
-        else:
-          uploaded_file = st.camera_input("카메라 촬영")
 
-        submitted = st.form_submit_button("제출하기")
+        submitted = st.form_submit_button("올리기", use_container_width=True)
 
         if submitted:
           if not uploaded_file:
-            st.warning("사진을 선택하거나 촬영해 주세요!")
+            st.warning("사진을 촬영하거나 선택해 주세요!")
           else:
             file_extension = "jpg"
             if hasattr(uploaded_file, "name"):
@@ -198,7 +203,7 @@ for idx, group_name in enumerate(groups):
           if os.path.exists(file_path):
             st.image(file_path, use_container_width=True)
 
-            # 사진 확대 버튼 (선생님이 설명용으로 크게 볼 수 있도록)
+            # 사진 확대 버튼
             if st.button("🔍 크게 보기", key=f"zoom_{row['filename']}"):
               st.session_state.zoomed_image = file_path
               st.session_state.zoomed_info = f"[{row['group']}] 제출된 사진"
