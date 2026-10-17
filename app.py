@@ -7,7 +7,7 @@ st.set_page_config(
     page_title="세계 축제 이미지 분석", page_icon="🌍", layout="wide"
 )
 
-# 나눔고딕 명시적 적용 및 눈부시지 않은 아주 연하고 화사한 파스텔톤 그라데이션 배경 & 버튼 스타일 CSS
+# 나눔고딕 명시적 적용 및 깔끔한 CSS (불필요한 아이콘 숨김 처리)
 st.markdown(
     """
     <style>
@@ -17,7 +17,7 @@ st.markdown(
         font-family: 'Nanum Gothic', sans-serif !important;
     }
     
-    /* 눈이 편안한 아주 연하고 밝은 파스텔톤 그라데이션 배경 */
+    /* 눈이 편안한 아주 연하고 밝은 파스텔톤 배경 */
     .stApp {
         background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
         background-attachment: fixed;
@@ -30,6 +30,13 @@ st.markdown(
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         margin-bottom: 1rem;
+    }
+
+    /* popover 기본 화살표/텍스트 깔끔하게 정돈 */
+    [data-testid="stPopover"] button {
+        border: none;
+        background: transparent;
+        font-size: 1.2rem;
     }
     </style>
     """,
@@ -66,7 +73,7 @@ if "zoomed_image" not in st.session_state:
   st.session_state.zoomed_image = None
 
 
-# --- 상단 헤더 및 티 안 나는 교사 인증 (우측 구석에 숨겨진 점) ---
+# --- 상단 헤더 및 깔끔하고 확실한 교사 인증 (톱니바퀴 아이콘) ---
 col_title, col_secret = st.columns([12, 1])
 
 with col_title:
@@ -78,20 +85,29 @@ with col_title:
   )
 
 with col_secret:
-  # 티 나지 않는 아주 작은 투명 포인트 (우측 구석의 점)
-  if st.popover(".", help=""):
+  # 티 나지 않지만 누르기 편한 톱니바퀴 설정 아이콘
+  with st.popover("⚙️"):
     if not st.session_state.is_teacher:
+      st.markdown(
+          "<p style='font-size: 13px; font-weight: bold; margin-bottom:"
+          " 5px;'>교사 인증</p>",
+          unsafe_allow_html=True,
+      )
       pw_input = st.text_input(
-          "Password",
+          "비밀번호",
           type="password",
           key="teacher_pw_input",
           label_visibility="collapsed",
       )
       if pw_input == "1232":
         st.session_state.is_teacher = True
+        st.success("인증 성공!")
         st.rerun()
+      elif pw_input and pw_input != "1232":
+        st.error("비밀번호 오류")
     else:
-      if st.button("교사 모드 종료"):
+      st.success("교사 모드 작동 중")
+      if st.button("교사 모드 종료", use_container_width=True):
         st.session_state.is_teacher = False
         st.rerun()
 
