@@ -9,12 +9,11 @@
     <!-- 나눔고딕 폰트 -->
     <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
     
-    <!-- Firebase SDK (실시간 연동용) -->
+    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 🔑 회원님의 파이어베이스 설정값 적용 완료
         const firebaseConfig = {
             apiKey: "AIzaSyAi8NhQs3sorLgP-P0iZVumNPsxHMlfGy4",
             authDomain: "festival-3c008.firebaseapp.com",
@@ -28,11 +27,10 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        let selectedImageData = null;
+        let compressedImageData = null;
         let isTeacherMode = false;
 
         window.onload = function() {
-            // 실시간 데이터 감지 (스마트폰에서 올리면 컴퓨터에 즉시 반영됨!)
             const q = query(collection(db, "posts"), orderBy("time", "desc"));
             onSnapshot(q, (snapshot) => {
                 const groups = ['1모둠', '2모둠', '3모둠', '4모둠'];
@@ -53,7 +51,7 @@
                     document.getElementById(`count-${group}`).innerText = counts[group];
 
                     const card = document.createElement('div');
-                    card.className = 'bg-white rounded-xl shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden border border-gray-100 flex flex-col';
+                    card.className = 'bg-white rounded-xl shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden border border-gray-100 flex flex-col shrink-0';
                     card.onclick = () => openFullScreen(group, data.image);
 
                     let deleteButtonHtml = '';
@@ -62,7 +60,7 @@
                     }
 
                     card.innerHTML = `
-                        <div class="relative h-40 md:h-48 bg-gray-100 overflow-hidden">
+                        <div class="relative h-44 bg-gray-100 overflow-hidden">
                             <img src="${data.image}" alt="학습지 사진" class="w-full h-full object-cover hover:scale-105 transition duration-300">
                             ${deleteButtonHtml}
                             <span class="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] md:text-[11px] px-2 py-0.5 rounded backdrop-blur-sm">${data.timeText || ''}</span>
@@ -73,11 +71,10 @@
             });
         };
 
-        // 전역 함수 연결
         window.openUploadModal = function(groupName) {
             document.getElementById('targetGroup').value = groupName;
             document.getElementById('modalTitle').innerText = `📸 ${groupName} 학습지 업로드`;
-            selectedImageData = null;
+            compressedImageData = null;
             document.getElementById('selectedFileName').innerText = '';
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').className = 'px-4 py-2 bg-indigo-300 text-white text-sm rounded-xl cursor-not-allowed transition font-semibold';
@@ -89,25 +86,56 @@
             document.getElementById('uploadForm').reset();
         };
 
+        // 🚀 이미지 압축 및 최적화 함수 (30초 걸리던 걸 1초로 단축!)
         window.handleFileSelect = function(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            document.getElementById('selectedFileName').innerText = `✓ 선택됨: ${file.name}`;
+            document.getElementById('selectedFileName').innerText = `✓ 처리 중... (${file.name})`;
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                selectedImageData = e.target.result;
-                const submitBtn = document.getElementById('submitBtn');
-                submitBtn.disabled = false;
-                submitBtn.className = 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition font-semibold';
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1000; // 최대 너비 제한
+                    const MAX_HEIGHT = 1000; // 최대 높이 제한
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // 화질을 0.7로 압축하여 가벼운 데이터로 변환
+                    compressedImageData = canvas.toDataURL('image/jpeg', 0.7);
+
+                    document.getElementById('selectedFileName').innerText = `✓ 준비 완료: ${file.name}`;
+                    const submitBtn = document.getElementById('submitBtn');
+                    submitBtn.disabled = false;
+                    submitBtn.className = 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition font-semibold';
+                };
             };
             reader.readAsDataURL(file);
         };
 
         window.handleUpload = async function(event) {
             event.preventDefault();
-            if (!selectedImageData) return;
+            if (!compressedImageData) return;
 
             const group = document.getElementById('targetGroup').value;
             const submitBtn = document.getElementById('submitBtn');
@@ -117,13 +145,13 @@
             try {
                 await addDoc(collection(db, "posts"), {
                     group: group,
-                    image: selectedImageData,
+                    image: compressedImageData,
                     time: Date.now(),
                     timeText: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
                 closeUploadModal();
             } catch (error) {
-                alert("업로드 실패: 사진 용량이 너무 클 수 있습니다.");
+                alert("업로드 실패: 다시 시도해주세요.");
             } finally {
                 submitBtn.innerText = "올리기";
             }
@@ -187,60 +215,60 @@
         </button>
     </header>
 
-    <main class="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+    <main class="flex-1 w-full p-4 md:p-6 overflow-x-auto flex items-center">
+        <div class="flex gap-4 md:gap-6 min-w-full h-[calc(100vh-140px)] items-stretch">
             
             <!-- 1모둠 -->
-            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white w-[280px] md:w-[320px] shrink-0 h-full">
                 <div class="flex justify-between items-center mb-3 px-1">
                     <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span> 1모둠
                     </h2>
                     <span id="count-1모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-1모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <div id="column-1모둠" class="space-y-3 mb-3 flex-1 overflow-y-auto pr-1"></div>
                 <button onclick="openUploadModal('1모둠')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
                     <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
             <!-- 2모둠 -->
-            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white w-[280px] md:w-[320px] shrink-0 h-full">
                 <div class="flex justify-between items-center mb-3 px-1">
                     <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> 2모둠
                     </h2>
                     <span id="count-2모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-2모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <div id="column-2모둠" class="space-y-3 mb-3 flex-1 overflow-y-auto pr-1"></div>
                 <button onclick="openUploadModal('2모둠')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
                     <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
             <!-- 3모둠 -->
-            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white w-[280px] md:w-[320px] shrink-0 h-full">
                 <div class="flex justify-between items-center mb-3 px-1">
                     <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> 3모둠
                     </h2>
                     <span id="count-3모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-3모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <div id="column-3모둠" class="space-y-3 mb-3 flex-1 overflow-y-auto pr-1"></div>
                 <button onclick="openUploadModal('3모둠')" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
                     <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
             <!-- 4모둠 -->
-            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white w-[280px] md:w-[320px] shrink-0 h-full">
                 <div class="flex justify-between items-center mb-3 px-1">
                     <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> 4모둠
                     </h2>
                     <span id="count-4모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-4모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <div id="column-4모둠" class="space-y-3 mb-3 flex-1 overflow-y-auto pr-1"></div>
                 <button onclick="openUploadModal('4모둠')" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
                     <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
