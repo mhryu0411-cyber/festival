@@ -2,12 +2,12 @@ import os
 import pandas as pd
 import streamlit as st
 
-# 페이지 기본 설정 (컴퓨터/모바일 모두 대응하는 wide 레이아웃)
+# 페이지 기본 설정 (Wide 레이아웃)
 st.set_page_config(
     page_title="축제 사진 상상하고 분석하기", page_icon="📸", layout="wide"
 )
 
-# 나눔고딕 폰트 적용 및 은은한 그라데이션 배경, 스타일 커스텀 CSS
+# 나눔고딕 폰트 적용 및 감성적인 파스텔톤 그라데이션 배경 CSS
 st.markdown(
     """
     <style>
@@ -17,16 +17,18 @@ st.markdown(
         font-family: 'Nanum Gothic', sans-serif !important;
     }
     
+    /* 예쁜 파스텔톤 그라데이션 배경 (라벤더 & 스카이블루 톤) */
     .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        background-attachment: fixed;
     }
     
     /* 카드 디자인 최적화 */
     div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
-        background-color: white;
+        background-color: rgba(255, 255, 255, 0.9);
         padding: 0.8rem;
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
         margin-bottom: 1rem;
     }
     </style>
@@ -50,9 +52,7 @@ def load_data():
       df["group"] = "1모둠"
     return df
   else:
-    return pd.DataFrame(
-        columns=["name", "group", "filename", "timestamp"]
-    )
+    return pd.DataFrame(columns=["group", "filename", "timestamp"])
 
 
 # 세션 상태 초기화
@@ -62,44 +62,51 @@ if "data" not in st.session_state:
 if "is_teacher" not in st.session_state:
   st.session_state.is_teacher = False
 
+if "show_pw_box" not in st.session_state:
+  st.session_state.show_pw_box = False
+
 if "zoomed_image" not in st.session_state:
   st.session_state.zoomed_image = None
 
 
-# --- 상단 타이틀 및 티 안 나는 교사 진입 아이콘 ---
+# --- 상단 타이틀 및 티 안 나는 교사 진입 아이콘 (비밀번호 숨김 처리) ---
 col_title, col_icon = st.columns([11, 1])
 
 with col_title:
   st.title("🎉 축제 사진 상상하고 분석하기")
 
 with col_icon:
-  # 텍스트 없이 아이콘만 표시, 누르면 비밀번호 입력 팝오버
   if st.popover("👤"):
     if not st.session_state.is_teacher:
-      pw_input = st.text_input(
-          "비밀번호", type="password", key="teacher_pw_input"
-      )
-      if pw_input == "1232":
-        st.session_state.is_teacher = True
-        st.rerun()
-      elif pw_input and pw_input != "1232":
-        st.error("비밀번호 오류")
+      # 평소에는 숨겨져 있다가 버튼을 눌러야 비밀번호 입력창이 나타남
+      if not st.session_state.show_pw_box:
+        if st.button("🔐 관리자 로그인"):
+          st.session_state.show_pw_box = True
+          st.rerun()
+      else:
+        pw_input = st.text_input(
+            "비밀번호 입력", type="password", key="teacher_pw_input"
+        )
+        if pw_input == "1232":
+          st.session_state.is_teacher = True
+          st.session_state.show_pw_box = False
+          st.rerun()
+        elif pw_input and pw_input != "1232":
+          st.error("비밀번호 오류")
     else:
       st.success("교사 모드 활성화됨")
       if st.button("교사 모드 종료"):
         st.session_state.is_teacher = False
+        st.session_state.show_pw_box = False
         st.rerun()
 
 # 교사 모드 안내 배너
 if st.session_state.is_teacher:
-  st.info(
-      "🔓 [교사 모드] 게시물 삭제 및 확대하여 설명하기 기능을 사용할 수"
-      " 있습니다."
-  )
+  st.info("🔓 [교사 모드] 사진을 클릭하여 확대하거나 삭제할 수 있습니다.")
 
 st.divider()
 
-# --- 사진 확대 보기 영역 (교사가 설명용으로 사용할 때) ---
+# --- 사진 확대 보기 영역 ---
 if st.session_state.zoomed_image:
   st.markdown("### 🔍 확대된 사진 보기")
   with st.container(border=True):
@@ -131,14 +138,12 @@ for idx, group_name in enumerate(groups):
     with st.popover(f"➕ {group_name} 사진 올리기", use_container_width=True):
       st.markdown(f"**{group_name} 사진 등록**")
       with st.form(f"form_{group_name}", clear_on_submit=True):
-        name = st.text_input("학번 / 이름", placeholder="예: 24 김동국")
-
         upload_type = st.radio(
-            "방식 선택", ["파일 업로드", "직접 촬영"], horizontal=True
+            "방식 선택", ["사진선택", "카메라"], horizontal=True
         )
 
         uploaded_file = None
-        if upload_type == "파일 업로드":
+        if upload_type == "사진선택":
           uploaded_file = st.file_uploader(
               "사진 선택", type=["jpg", "jpeg", "png"]
           )
@@ -148,8 +153,8 @@ for idx, group_name in enumerate(groups):
         submitted = st.form_submit_button("제출하기")
 
         if submitted:
-          if not name or not uploaded_file:
-            st.warning("이름과 사진을 모두 입력/촬영해 주세요!")
+          if not uploaded_file:
+            st.warning("사진을 선택하거나 촬영해 주세요!")
           else:
             file_extension = "jpg"
             if hasattr(uploaded_file, "name"):
@@ -163,7 +168,6 @@ for idx, group_name in enumerate(groups):
 
             new_row = pd.DataFrame(
                 [{
-                    "name": name,
                     "group": group_name,
                     "filename": safe_filename,
                     "timestamp": pd.Timestamp.now().strftime(
@@ -189,18 +193,15 @@ for idx, group_name in enumerate(groups):
     else:
       for i, row in group_df.iterrows():
         with st.container(border=True):
-          st.markdown(f"**👤 {row['name']}**")
           file_path = os.path.join(UPLOAD_DIR, row["filename"])
 
           if os.path.exists(file_path):
             st.image(file_path, use_container_width=True)
 
-            # 사진 확대 버튼 (교사 또는 학생들이 크게 볼 수 있도록)
+            # 사진 확대 버튼 (선생님이 설명용으로 크게 볼 수 있도록)
             if st.button("🔍 크게 보기", key=f"zoom_{row['filename']}"):
               st.session_state.zoomed_image = file_path
-              st.session_state.zoomed_info = (
-                  f"[{row['group']}] {row['name']} 학생 제출"
-              )
+              st.session_state.zoomed_info = f"[{row['group']}] 제출된 사진"
               st.rerun()
           else:
             st.error("이미지를 찾을 수 없습니다.")
