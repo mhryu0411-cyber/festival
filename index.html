@@ -4,102 +4,247 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>세계 축제 이미지 분석 - 모둠 활동 보드</title>
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 나눔고딕 폰트 적용 -->
+    <!-- 나눔고딕 폰트 -->
     <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK (실시간 연동용) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // 🔑 [여기에 본인의 Firebase 설정값을 붙여넣으세요!]
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let selectedImageData = null;
+        let isTeacherMode = false;
+
+        window.onload = function() {
+            // 실시간 데이터 감지 (스마트폰에서 올리면 컴퓨터에 즉시 반영됨!)
+            const q = query(collection(db, "posts"), orderBy("time", "desc"));
+            onSnapshot(q, (snapshot) => {
+                const groups = ['1모둠', '2모둠', '3모둠', '4모둠'];
+                groups.forEach(g => {
+                    document.getElementById(`column-${g}`).innerHTML = '';
+                    document.getElementById(`count-${g}`).innerText = '0';
+                });
+
+                const counts = { '1모둠': 0, '2모둠': 0, '3모둠': 0, '4모둠': 0 };
+
+                snapshot.forEach((docSnap) => {
+                    const post = docSnap.id;
+                    const data = docSnap.data();
+                    const group = data.group;
+
+                    if (!document.getElementById(`column-${group}`)) return;
+
+                    counts[group]++;
+                    document.getElementById(`count-${group}`).innerText = counts[group];
+
+                    const card = document.createElement('div');
+                    card.className = 'bg-white rounded-xl shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden border border-gray-100 flex flex-col';
+                    card.onclick = () => openFullScreen(group, data.image);
+
+                    let deleteButtonHtml = '';
+                    if (isTeacherMode) {
+                        deleteButtonHtml = `<button onclick="deletePost('${docSnap.id}', event)" class="absolute top-2 right-2 bg-red-600 text-white text-xs w-7 h-7 rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 font-bold z-10">&times;</button>`;
+                    }
+
+                    card.innerHTML = `
+                        <div class="relative h-40 md:h-48 bg-gray-100 overflow-hidden">
+                            <img src="${data.image}" alt="학습지 사진" class="w-full h-full object-cover hover:scale-105 transition duration-300">
+                            ${deleteButtonHtml}
+                            <span class="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] md:text-[11px] px-2 py-0.5 rounded backdrop-blur-sm">${data.timeText || ''}</span>
+                        </div>
+                    `;
+                    document.getElementById(`column-${group}`).appendChild(card);
+                });
+            });
+        };
+
+        // 전역 함수 연결
+        window.openUploadModal = function(groupName) {
+            document.getElementById('targetGroup').value = groupName;
+            document.getElementById('modalTitle').innerText = `📸 ${groupName} 학습지 업로드`;
+            selectedImageData = null;
+            document.getElementById('selectedFileName').innerText = '';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').className = 'px-4 py-2 bg-indigo-300 text-white text-sm rounded-xl cursor-not-allowed transition font-semibold';
+            document.getElementById('uploadModal').classList.remove('hidden');
+        };
+
+        window.closeUploadModal = function() {
+            document.getElementById('uploadModal').classList.add('hidden');
+            document.getElementById('uploadForm').reset();
+        };
+
+        window.handleFileSelect = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('selectedFileName').innerText = `✓ 선택됨: ${file.name}`;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // 용량 제한 방지를 위해 이미지 압축 또는 그대로 사용
+                selectedImageData = e.target.result;
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.disabled = false;
+                submitBtn.className = 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition font-semibold';
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.handleUpload = async function(event) {
+            event.preventDefault();
+            if (!selectedImageData) return;
+
+            const group = document.getElementById('targetGroup').value;
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = "업로드 중...";
+            submitBtn.disabled = true;
+
+            try {
+                await addDoc(collection(db, "posts"), {
+                    group: group,
+                    image: selectedImageData,
+                    time: Date.now(),
+                    timeText: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+                closeUploadModal();
+            } catch (error) {
+                alert("업로드 실패: 사진 용량이 너무 클 수 있습니다.");
+            } finally {
+                submitBtn.innerText = "올리기";
+            }
+        };
+
+        window.deletePost = async function(id, event) {
+            event.stopPropagation();
+            if (confirm('이 사진을 삭제하시겠습니까?')) {
+                await deleteDoc(doc(db, "posts", id));
+            }
+        };
+
+        window.toggleTeacherMode = function() {
+            if (!isTeacherMode) {
+                const password = prompt("비밀번호를 입력하세요");
+                if (password === "1232") {
+                    isTeacherMode = true;
+                    // 리렌더링 유도를 위해 간단히 새로고침 혹은 상태 갱신
+                    location.reload();
+                } else if (password !== null) {
+                    alert("비밀번호가 틀렸습니다.");
+                }
+            } else {
+                isTeacherMode = false;
+                location.reload();
+            }
+        };
+
+        window.openFullScreen = function(group, imageSrc) {
+            document.getElementById('fullScreenGroup').innerText = group;
+            document.getElementById('fullScaleImage').src = imageSrc;
+            document.getElementById('fullScreenModal').classList.remove('hidden');
+            document.getElementById('fullScreenModal').classList.add('flex');
+        };
+
+        window.closeFullScreen = function() {
+            document.getElementById('fullScreenModal').classList.remove('flex');
+            document.getElementById('fullScreenModal').classList.add('hidden');
+        };
+    </script>
+
     <style>
         body {
-            /* 아주 은은하고 부드러운 그라데이션 배경 적용 */
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
             font-family: 'Nanum Gothic', sans-serif;
             min-height: 100vh;
         }
-        /* 스크롤바 디자인 */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     </style>
 </head>
-<body class="flex flex-col">
+<body class="flex flex-col min-h-screen">
 
-    <!-- 상단 헤더 -->
-    <header class="bg-indigo-600/90 backdrop-blur-md text-white shadow-md py-4 px-6 flex justify-between items-center sticky top-0 z-40">
+    <header class="bg-indigo-600/90 backdrop-blur-md text-white shadow-md py-3 px-4 md:px-6 flex justify-between items-center sticky top-0 z-40">
         <div>
-            <h1 class="text-2xl font-bold">🌍 세계 축제 이미지 분석</h1>
-            <p class="text-indigo-200 text-sm mt-0.5">모둠별 학습지 공유 보드</p>
+            <h1 class="text-lg md:text-2xl font-bold">🌍 세계 축제 이미지 분석</h1>
+            <p class="text-indigo-200 text-xs md:text-sm mt-0.5">모둠별 학습지 공유 보드</p>
         </div>
-        <!-- 은은한 사람 아이콘 (선생님 모드 진입용) -->
-        <button id="teacherModeBtn" onclick="toggleTeacherMode()" class="text-indigo-200 hover:text-white p-2 rounded-xl transition text-xl" title="설정">
+        <button onclick="toggleTeacherMode()" class="text-indigo-200 hover:text-white p-2 rounded-xl transition text-lg" title="설정">
             👤
         </button>
     </header>
 
-    <!-- 메인 패들렛 보드 영역 (1~4모둠 컬럼) -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 overflow-x-auto">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-w-[900px] h-full">
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
             
-            <!-- 1모둠 컬럼 -->
-            <div class="bg-white/70 backdrop-blur-sm rounded-2xl p-4 flex flex-col h-[calc(100vh-160px)] shadow-sm border border-white">
+            <!-- 1모둠 -->
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
                 <div class="flex justify-between items-center mb-3 px-1">
-                    <h2 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span> 1모둠
                     </h2>
                     <span id="count-1모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-1모둠" class="flex-1 overflow-y-auto space-y-4 pr-1 mb-3"></div>
-                <button onclick="openUploadModal('1모둠')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
-                    <span class="text-xl leading-none">+</span> 사진 올리기
+                <div id="column-1모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <button onclick="openUploadModal('1모둠')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
+                    <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
-            <!-- 2모둠 컬럼 -->
-            <div class="bg-white/70 backdrop-blur-sm rounded-2xl p-4 flex flex-col h-[calc(100vh-160px)] shadow-sm border border-white">
+            <!-- 2모둠 -->
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
                 <div class="flex justify-between items-center mb-3 px-1">
-                    <h2 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> 2모둠
                     </h2>
                     <span id="count-2모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-2모둠" class="flex-1 overflow-y-auto space-y-4 pr-1 mb-3"></div>
-                <button onclick="openUploadModal('2모둠')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
-                    <span class="text-xl leading-none">+</span> 사진 올리기
+                <div id="column-2모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <button onclick="openUploadModal('2모둠')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
+                    <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
-            <!-- 3모둠 컬럼 -->
-            <div class="bg-white/70 backdrop-blur-sm rounded-2xl p-4 flex flex-col h-[calc(100vh-160px)] shadow-sm border border-white">
+            <!-- 3모둠 -->
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
                 <div class="flex justify-between items-center mb-3 px-1">
-                    <h2 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> 3모둠
                     </h2>
                     <span id="count-3모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-3모둠" class="flex-1 overflow-y-auto space-y-4 pr-1 mb-3"></div>
-                <button onclick="openUploadModal('3모둠')" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
-                    <span class="text-xl leading-none">+</span> 사진 올리기
+                <div id="column-3모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <button onclick="openUploadModal('3모둠')" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
+                    <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
-            <!-- 4모둠 컬럼 -->
-            <div class="bg-white/70 backdrop-blur-sm rounded-2xl p-4 flex flex-col h-[calc(100vh-160px)] shadow-sm border border-white">
+            <!-- 4모둠 -->
+            <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-4 flex flex-col shadow-sm border border-white">
                 <div class="flex justify-between items-center mb-3 px-1">
-                    <h2 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    <h2 class="font-bold text-gray-800 text-base md:text-lg flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> 4모둠
                     </h2>
                     <span id="count-4모둠" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold shadow-sm">0</span>
                 </div>
-                <div id="column-4모둠" class="flex-1 overflow-y-auto space-y-4 pr-1 mb-3"></div>
-                <button onclick="openUploadModal('4모둠')" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
-                    <span class="text-xl leading-none">+</span> 사진 올리기
+                <div id="column-4모둠" class="space-y-3 mb-3 max-h-[350px] lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-1"></div>
+                <button onclick="openUploadModal('4모둠')" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm md:text-base">
+                    <span class="text-lg leading-none">+</span> 사진 올리기
                 </button>
             </div>
 
@@ -108,31 +253,31 @@
 
     <!-- 업로드 모달 -->
     <div id="uploadModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h2 id="modalTitle" class="text-xl font-bold mb-4 text-gray-800">📸 학습지 업로드</h2>
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <h2 id="modalTitle" class="text-lg font-bold mb-4 text-gray-800">📸 학습지 업로드</h2>
             <form id="uploadForm" onsubmit="handleUpload(event)">
                 <input type="hidden" id="targetGroup">
 
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">사진 첨부 방식 선택</label>
+                <div class="mb-5">
+                    <label class="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">사진 첨부 방식 선택</label>
                     <div class="grid grid-cols-2 gap-3">
-                        <label class="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/50 rounded-xl p-4 text-center cursor-pointer flex flex-col items-center justify-center transition">
+                        <label class="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/50 rounded-xl p-3 text-center cursor-pointer flex flex-col items-center justify-center transition">
                             <span class="text-2xl mb-1">📷</span>
-                            <span class="text-sm font-semibold text-indigo-700">카메라 촬영</span>
+                            <span class="text-xs font-semibold text-indigo-700">카메라 촬영</span>
                             <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleFileSelect(event)">
                         </label>
-                        <label class="border-2 border-dashed border-gray-300 hover:border-gray-500 bg-gray-50 rounded-xl p-4 text-center cursor-pointer flex flex-col items-center justify-center transition">
+                        <label class="border-2 border-dashed border-gray-300 hover:border-gray-500 bg-gray-50 rounded-xl p-3 text-center cursor-pointer flex flex-col items-center justify-center transition">
                             <span class="text-2xl mb-1">📁</span>
-                            <span class="text-sm font-semibold text-gray-700">파일 / 앨범</span>
+                            <span class="text-xs font-semibold text-gray-700">파일 / 앨범</span>
                             <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
                         </label>
                     </div>
-                    <p id="selectedFileName" class="text-xs text-gray-500 mt-2 text-center truncate"></p>
+                    <p id="selectedFileName" class="text-xs text-indigo-600 mt-2 text-center font-medium truncate"></p>
                 </div>
 
                 <div class="flex justify-end space-x-2">
-                    <button type="button" onclick="closeUploadModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition">취소</button>
-                    <button type="submit" id="submitBtn" disabled class="px-4 py-2 bg-indigo-300 text-white rounded-xl cursor-not-allowed transition">올리기</button>
+                    <button type="button" onclick="closeUploadModal()" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-xl hover:bg-gray-200 transition font-semibold">취소</button>
+                    <button type="submit" id="submitBtn" disabled class="px-4 py-2 bg-indigo-300 text-white text-sm rounded-xl cursor-not-allowed transition font-semibold">올리기</button>
                 </div>
             </form>
         </div>
@@ -142,161 +287,8 @@
     <div id="fullScreenModal" class="fixed inset-0 bg-black bg-opacity-95 hidden flex-col justify-center items-center z-50 p-2 md:p-6" onclick="closeFullScreen()">
         <button class="absolute top-4 right-6 text-white text-4xl font-bold hover:text-gray-300 z-50">&times;</button>
         <div class="text-center w-full h-full flex flex-col justify-center items-center" onclick="event.stopPropagation()">
-            <div class="mb-2 flex items-center gap-3">
-                <span id="fullScreenGroup" class="bg-indigo-600 text-white text-sm font-bold px-3 py-1 rounded-full"></span>
-            </div>
-            <img id="fullScreenImage" src="" alt="대형 이미지" class="max-h-[88vh] max-w-[95vw] w-auto h-auto object-contain rounded-xl shadow-2xl cursor-zoom-out" onclick="closeFullScreen()">
+            <img id="fullScaleImage" src="" alt="대형 이미지" class="max-h-[85vh] max-w-[95vw] w-auto h-auto object-contain rounded-xl shadow-2xl cursor-zoom-out" onclick="closeFullScreen()">
         </div>
     </div>
-
-    <!-- 자바스크립트 로직 -->
-    <script>
-        let posts = JSON.parse(localStorage.getItem('festival_posts_v6')) || [];
-        let selectedImageData = null;
-        let isTeacherMode = false;
-
-        window.onload = function() {
-            renderPosts();
-        };
-
-        // 선생님 모드 토글 (비밀번호 1232)
-        function toggleTeacherMode() {
-            if (!isTeacherMode) {
-                const password = prompt("비밀번호를 입력하세요");
-                if (password === "1232") {
-                    isTeacherMode = true;
-                    renderPosts();
-                    updateTeacherButton();
-                } else if (password !== null) {
-                    alert("비밀번호가 틀렸습니다.");
-                }
-            } else {
-                isTeacherMode = false;
-                renderPosts();
-                updateTeacherButton();
-            }
-        }
-
-        function updateTeacherButton() {
-            const btn = document.getElementById('teacherModeBtn');
-            if (isTeacherMode) {
-                btn.className = "bg-rose-500 text-white p-2 rounded-xl transition text-xl shadow-inner";
-                btn.title = "선생님 모드 ON";
-            } else {
-                btn.className = "text-indigo-200 hover:text-white p-2 rounded-xl transition text-xl";
-                btn.title = "설정";
-            }
-        }
-
-        function openUploadModal(groupName) {
-            document.getElementById('targetGroup').value = groupName;
-            document.getElementById('modalTitle').innerText = `📸 ${groupName} 학습지 업로드`;
-            selectedImageData = null;
-            document.getElementById('selectedFileName').innerText = '';
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').className = 'px-4 py-2 bg-indigo-300 text-white rounded-xl cursor-not-allowed transition';
-            document.getElementById('uploadModal').classList.remove('hidden');
-        }
-
-        function closeUploadModal() {
-            document.getElementById('uploadModal').classList.add('hidden');
-            document.getElementById('uploadForm').reset();
-        }
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            document.getElementById('selectedFileName').innerText = `선택된 파일: ${file.name}`;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                selectedImageData = e.target.result;
-                const submitBtn = document.getElementById('submitBtn');
-                submitBtn.disabled = false;
-                submitBtn.className = 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition';
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function handleUpload(event) {
-            event.preventDefault();
-            if (!selectedImageData) return;
-
-            const group = document.getElementById('targetGroup').value;
-
-            const newPost = {
-                id: Date.now(),
-                group: group,
-                image: selectedImageData,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-
-            posts.unshift(newPost);
-            saveAndRender();
-            closeUploadModal();
-        }
-
-        function deletePost(id, event) {
-            event.stopPropagation();
-            if (confirm('이 사진을 삭제하시겠습니까?')) {
-                posts = posts.filter(p => p.id !== id);
-                saveAndRender();
-            }
-        }
-
-        function saveAndRender() {
-            localStorage.setItem('festival_posts_v6', JSON.stringify(posts));
-            renderPosts();
-        }
-
-        function renderPosts() {
-            const groups = ['1모둠', '2모둠', '3모둠', '4모둠'];
-            groups.forEach(g => {
-                document.getElementById(`column-${g}`).innerHTML = '';
-                document.getElementById(`count-${g}`).innerText = '0';
-            });
-
-            const counts = { '1모둠': 0, '2모둠': 0, '3모둠': 0, '4모둠': 0 };
-
-            posts.forEach(post => {
-                const column = document.getElementById(`column-${post.group}`);
-                if (!column) return;
-
-                counts[post.group]++;
-                document.getElementById(`count-${post.group}`).innerText = counts[post.group];
-
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden border border-gray-100 flex flex-col';
-                card.onclick = () => openFullScreen(post.group, post.image);
-
-                let deleteButtonHtml = '';
-                if (isTeacherMode) {
-                    deleteButtonHtml = `<button onclick="deletePost(${post.id}, event)" class="absolute top-2 right-2 bg-red-600 text-white text-xs w-7 h-7 rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 font-bold z-10">&times;</button>`;
-                }
-
-                card.innerHTML = `
-                    <div class="relative h-48 bg-gray-100 overflow-hidden">
-                        <img src="${post.image}" alt="학습지 사진" class="w-full h-full object-cover hover:scale-105 transition duration-300">
-                        ${deleteButtonHtml}
-                        <span class="absolute bottom-2 left-2 bg-black/60 text-white text-[11px] px-2 py-0.5 rounded backdrop-blur-sm">${post.time}</span>
-                    </div>
-                `;
-                column.appendChild(card);
-            });
-        }
-
-        function openFullScreen(group, imageSrc) {
-            document.getElementById('fullScreenGroup').innerText = group;
-            document.getElementById('fullScreenImage').src = imageSrc;
-            document.getElementById('fullScreenModal').classList.remove('hidden');
-            document.getElementById('fullScreenModal').classList.add('flex');
-        }
-
-        function closeFullScreen() {
-            document.getElementById('fullScreenModal').classList.remove('flex');
-            document.getElementById('fullScreenModal').classList.add('hidden');
-        }
-    </script>
 </body>
 </html>
