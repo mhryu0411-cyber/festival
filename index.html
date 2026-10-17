@@ -14,14 +14,15 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 🔑 [여기에 본인의 Firebase 설정값을 붙여넣으세요!]
+        // 🔑 회원님의 파이어베이스 설정값 적용 완료
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyAi8NhQs3sorLgP-P0iZVumNPsxHMlfGy4",
+            authDomain: "festival-3c008.firebaseapp.com",
+            projectId: "festival-3c008",
+            storageBucket: "festival-3c008.firebasestorage.app",
+            messagingSenderId: "39038183725",
+            appId: "1:39038183725:web:baaa62b8ec48c6860fcba4",
+            measurementId: "G-13KLK8HP4W"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -43,7 +44,6 @@
                 const counts = { '1모둠': 0, '2모둠': 0, '3모둠': 0, '4모둠': 0 };
 
                 snapshot.forEach((docSnap) => {
-                    const post = docSnap.id;
                     const data = docSnap.data();
                     const group = data.group;
 
@@ -97,7 +97,6 @@
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                // 용량 제한 방지를 위해 이미지 압축 또는 그대로 사용
                 selectedImageData = e.target.result;
                 const submitBtn = document.getElementById('submitBtn');
                 submitBtn.disabled = false;
@@ -142,7 +141,6 @@
                 const password = prompt("비밀번호를 입력하세요");
                 if (password === "1232") {
                     isTeacherMode = true;
-                    // 리렌더링 유도를 위해 간단히 새로고침 혹은 상태 갱신
                     location.reload();
                 } else if (password !== null) {
                     alert("비밀번호가 틀렸습니다.");
@@ -155,7 +153,7 @@
 
         window.openFullScreen = function(group, imageSrc) {
             document.getElementById('fullScreenGroup').innerText = group;
-            document.getElementById('fullScaleImage').src = imageSrc;
+            document.getElementById('fullScreenImage').src = imageSrc;
             document.getElementById('fullScreenModal').classList.remove('hidden');
             document.getElementById('fullScreenModal').classList.add('flex');
         };
@@ -287,7 +285,10 @@
     <div id="fullScreenModal" class="fixed inset-0 bg-black bg-opacity-95 hidden flex-col justify-center items-center z-50 p-2 md:p-6" onclick="closeFullScreen()">
         <button class="absolute top-4 right-6 text-white text-4xl font-bold hover:text-gray-300 z-50">&times;</button>
         <div class="text-center w-full h-full flex flex-col justify-center items-center" onclick="event.stopPropagation()">
-            <img id="fullScaleImage" src="" alt="대형 이미지" class="max-h-[85vh] max-w-[95vw] w-auto h-auto object-contain rounded-xl shadow-2xl cursor-zoom-out" onclick="closeFullScreen()">
+            <div class="mb-2 flex items-center gap-3">
+                <span id="fullScreenGroup" class="bg-indigo-600 text-white text-xs md:text-sm font-bold px-3 py-1 rounded-full"></span>
+            </div>
+            <img id="fullScreenImage" src="" alt="대형 이미지" class="max-h-[85vh] max-w-[95vw] w-auto h-auto object-contain rounded-xl shadow-2xl cursor-zoom-out" onclick="closeFullScreen()">
         </div>
     </div>
 </body>
